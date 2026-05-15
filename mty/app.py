@@ -10,8 +10,9 @@ from textual.events import Key
 from textual.widgets import Footer, Label
 
 from mty.screens import ResultsScreen
+from mty.stats import score
 from mty.widgets import WordsDisplay
-from mty.words import STYLE_BG, TIME_OPTIONS, WORD_OPTIONS, WORDS
+from mty.words import TIME_OPTIONS, WORD_OPTIONS, WORDS
 
 
 class MonkeytypeApp(App):
@@ -112,45 +113,8 @@ class MonkeytypeApp(App):
         self.set_interval(0.1, self._tick)
 
     def _compute_stats(self) -> dict:
-        """Compare typed vs. target word by word.
-
-        Comparing each word against its own target (instead of flattening
-        everything into one string) keeps a wrong-length word from shifting
-        every later character out of alignment — the bug that made wpm
-        collapse to near zero while raw stayed high.
-
-        Monkeytype convention: 1 word == 5 characters, the space after a
-        completed word counts as a correct character, wpm counts only
-        correct characters, raw counts everything typed.
-        """
         dw = self.word_display
-        correct = incorrect = extra = missed = 0
-        for wi in range(dw.word_idx + 1):
-            target = dw.words[wi]
-            typed = dw.typed[wi]
-            for ci, ch in enumerate(typed):
-                if ci < len(target):
-                    if ch == target[ci]:
-                        correct += 1
-                    else:
-                        incorrect += 1
-                else:
-                    extra += 1
-            if wi < dw.word_idx:  # a completed word
-                missed += max(0, len(target) - len(typed))
-                correct += 1  # the space separating it from the next word
-
-        total = correct + incorrect + extra
-        e = self.elapsed if self.elapsed > 0 else 0.001
-        minutes = e / 60
-        return {
-            "wpm": (correct / 5) / minutes,
-            "raw": (total / 5) / minutes,
-            "accuracy": (correct / total * 100) if total > 0 else 100.0,
-            "time": e,
-            "correct": correct, "incorrect": incorrect,
-            "extra": extra, "missed": missed,
-        }
+        return score(dw.words, dw.typed, dw.word_idx, self.elapsed)
 
     def _update_stats(self) -> None:
         e = self.elapsed if self.elapsed > 0 else 0.001

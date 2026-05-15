@@ -28,7 +28,7 @@ class WordsDisplay(Static):
 
         # Lay every word out into wrapped lines, then render only a small
         # window around the current word so the screen stays uncluttered.
-        lines = self._wrap_lines(max_line)
+        lines = self._wrap_lines(self.words, max_line)
         current_line = next(
             (li for li, indices in enumerate(lines) if self.word_idx in indices), 0
         )
@@ -49,11 +49,12 @@ class WordsDisplay(Static):
 
         return result
 
-    def _wrap_lines(self, max_line: int) -> list[list[int]]:
+    @staticmethod
+    def _wrap_lines(words: list[str], max_line: int) -> list[list[int]]:
         """Greedily group word indices into lines that fit the viewport width."""
         lines: list[list[int]] = [[]]
         used = 0
-        for wi, word in enumerate(self.words):
+        for wi, word in enumerate(words):
             extra = 1 if lines[-1] else 0
             if lines[-1] and used + extra + len(word) >= max_line:
                 lines.append([])

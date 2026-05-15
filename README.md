@@ -61,21 +61,23 @@ doesn't throw off the score for everything after it.
 
 ## Development
 
-The codebase is small — four modules under `mty/`:
+The codebase is small — five modules under `mty/`:
 
 | File | Responsibility |
 | --- | --- |
-| `app.py` | `MonkeytypeApp` — app state, timing, key handling, scoring |
+| `app.py` | `MonkeytypeApp` — app state, timing, key handling |
 | `widgets.py` | `WordsDisplay` — renders the scrolling 3-line word window |
 | `screens.py` | `ResultsScreen` — the end-of-test results modal |
+| `stats.py` | `score()` — pure WPM/accuracy scoring |
 | `words.py` | Word pool, colour styles, and mode options |
 
 `app.py` is the single source of truth: it mutates `WordsDisplay`'s state
-directly, then refreshes it. There is no test suite yet — contributions
-welcome.
+directly, then refreshes it.
 
-Run without installing:
+Run without installing, and run the tests:
 
 ```bash
-python -m mty.app
+python -m mty.app                # run from source
+pip install -e ".[dev]"          # install with pytest
+pytest                           # run the test suite
 ```

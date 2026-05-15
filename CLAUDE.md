@@ -9,14 +9,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-pip install -e .          # install (editable) with deps: textual, rich
+pip install -e ".[dev]"   # install (editable) with deps + pytest
 mty                       # run — defaults to 30s timed test
 mty --time 60             # timed mode (choices: 15, 30, 60, 120)
 mty --words 25            # word-count mode (choices: 10, 25, 50, 100)
 python -m mty.app         # run without installing
+pytest                    # run the test suite (tests/)
+pytest tests/test_stats.py::test_perfect_run   # run a single test
 ```
 
-No test suite, linter, or build step is configured. `requires-python >= 3.10`.
+No linter or build step is configured. `requires-python >= 3.10`.
 
 ## Architecture
 
@@ -34,18 +36,26 @@ Single-process Textual app, 4 modules under `mty/`:
   word-wraps all words (`_wrap_lines`), then renders only a `VISIBLE_LINES`-tall
   (3) window centered on the current line, with per-character coloring.
 - **`screens.py`** — `ResultsScreen`, a `ModalScreen` shown on test completion.
+- **`stats.py`** — `score()`, the pure scoring function (no Textual, no app
+  state). All WPM/accuracy logic lives here so it is unit-testable.
 - **`words.py`** — word pool (`WORDS`, deduped) plus Rich `Style` constants and
   the `TIME_OPTIONS` / `WORD_OPTIONS` lists. Style/color changes go here.
+
+Tests live in `tests/` and target the pure logic — `stats.score()` and
+`WordsDisplay._wrap_lines()`. Both are deliberately Textual-free so tests need
+no running app.
 
 ### Key conventions
 
 - **State flow:** `app.py` is the single source of truth. `WordsDisplay` is a dumb
   view — never add game logic to it; mutate its fields from `app.py` and `refresh()`.
-- **WPM/accuracy** are computed by `_compute_stats()`, the single source for
-  both the live stats bar and the final results. It compares `typed` vs.
-  `target` **word by word** (not as a flattened string) so a wrong-length word
-  cannot misalign every later character. 5 chars == 1 word; `wpm` counts only
-  correct chars, `raw` counts everything typed.
+- **WPM/accuracy** all flow through `stats.score()`; `app._compute_stats()` is a
+  thin wrapper feeding it the current `WordsDisplay` state. `score()` compares
+  `typed` vs. `target` **word by word** (not as a flattened string) so a
+  wrong-length word cannot misalign every later character. 5 chars == 1 word;
+  `wpm` counts only correct chars, `raw` counts everything typed. The WPM
+  denominator is clamped to a 1-second minimum so the live bar can't spike on
+  the first keystroke.
 - **Mode switching** (digit keys `1`-`8`, or clicking the mode bar) regenerates the
   word list and resets all counters; it is blocked once the timer is running.
 - Timed mode pre-generates 200 words; word mode generates `count + 10`.

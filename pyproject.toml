@@ -12,8 +12,14 @@ dependencies = [
     "rich>=13.0.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
 [project.scripts]
 mty = "mty:main"
 
 [tool.setuptools.packages.find]
 include = ["mty*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
