@@ -19,8 +19,9 @@ class MonkeytypeApp(App):
     CSS = """
     Screen { background: #2c2e31; }
     WordsDisplay {
-        width: 100%; height: auto; min-height: 6;
-        padding: 1 2; background: #2c2e31;
+        width: 100%; height: auto; min-height: 9;
+        padding: 2 4; background: #2c2e31;
+        text-style: bold;
     }
     #mode-bar {
         height: 3; padding: 0 2; background: #2c2e31;

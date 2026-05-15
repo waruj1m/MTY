@@ -30,8 +30,9 @@ Single-process Textual app, 4 modules under `mty/`:
   `MonkeytypeApp.CSS`.
 - **`widgets.py`** — `WordsDisplay` is a pure-render `Static`. It owns no game
   logic; `app.py` mutates its `typed` / `word_idx` / `char_idx` fields directly,
-  then calls `.refresh()`. `render()` rebuilds a Rich `Text` each frame, doing its
-  own word-wrap against the viewport width and per-character coloring.
+  then calls `.refresh()`. `render()` rebuilds a Rich `Text` each frame: it
+  word-wraps all words (`_wrap_lines`), then renders only a `VISIBLE_LINES`-tall
+  (3) window centered on the current line, with per-character coloring.
 - **`screens.py`** — `ResultsScreen`, a `ModalScreen` shown on test completion.
 - **`words.py`** — word pool (`WORDS`, deduped) plus Rich `Style` constants and
   the `TIME_OPTIONS` / `WORD_OPTIONS` lists. Style/color changes go here.
