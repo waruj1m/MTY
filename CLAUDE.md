@@ -1,3 +1,54 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+`mty` — a Monkeytype-style typing speed test that runs entirely in the terminal, built on [Textual](https://textual.textualize.io/).
+
+## Commands
+
+```bash
+pip install -e .          # install (editable) with deps: textual, rich
+mty                       # run — defaults to 30s timed test
+mty --time 60             # timed mode (choices: 15, 30, 60, 120)
+mty --words 25            # word-count mode (choices: 10, 25, 50, 100)
+python -m mty.app         # run without installing
+```
+
+No test suite, linter, or build step is configured. `requires-python >= 3.10`.
+
+## Architecture
+
+Single-process Textual app, 4 modules under `mty/`:
+
+- **`app.py`** — `MonkeytypeApp` owns all state and game logic: the timer
+  (`set_interval(0.1, self._tick)`), the active mode, and the word list. **All
+  keystrokes are handled in `App.on_key`**, not by a focused input widget — typed
+  characters are pushed into `WordsDisplay.typed`, and the test auto-starts on the
+  first keystroke. The CSS theme (Monkeytype's dark palette) lives inline in
+  `MonkeytypeApp.CSS`.
+- **`widgets.py`** — `WordsDisplay` is a pure-render `Static`. It owns no game
+  logic; `app.py` mutates its `typed` / `word_idx` / `char_idx` fields directly,
+  then calls `.refresh()`. `render()` rebuilds a Rich `Text` each frame, doing its
+  own word-wrap against the viewport width and per-character coloring.
+- **`screens.py`** — `ResultsScreen`, a `ModalScreen` shown on test completion.
+- **`words.py`** — word pool (`WORDS`, deduped) plus Rich `Style` constants and
+  the `TIME_OPTIONS` / `WORD_OPTIONS` lists. Style/color changes go here.
+
+### Key conventions
+
+- **State flow:** `app.py` is the single source of truth. `WordsDisplay` is a dumb
+  view — never add game logic to it; mutate its fields from `app.py` and `refresh()`.
+- **WPM/accuracy** are computed by `_compute_stats()`, the single source for
+  both the live stats bar and the final results. It compares `typed` vs.
+  `target` **word by word** (not as a flattened string) so a wrong-length word
+  cannot misalign every later character. 5 chars == 1 word; `wpm` counts only
+  correct chars, `raw` counts everything typed.
+- **Mode switching** (digit keys `1`-`8`, or clicking the mode bar) regenerates the
+  word list and resets all counters; it is blocked once the timer is running.
+- Timed mode pre-generates 200 words; word mode generates `count + 10`.
+
 <!-- cce-block-version: 3 -->
 ## Context Engine (CCE)
 

@@ -110,19 +110,46 @@ class MonkeytypeApp(App):
     def on_mount(self) -> None:
         self.set_interval(0.1, self._tick)
 
-    def _typed_text(self) -> str:
-        chars = []
-        for wi in range(self.word_display.word_idx + 1):
-            wc = self.word_display.typed[wi]
-            if wi < self.word_display.word_idx:
-                chars.extend(wc if wc else [])
-                chars.append(" ")
-            else:
-                chars.extend(wc if wc else [])
-        return "".join(chars)
+    def _compute_stats(self) -> dict:
+        """Compare typed vs. target word by word.
 
-    def _target_text(self) -> str:
-        return self.word_display.target[:len(self._typed_text())]
+        Comparing each word against its own target (instead of flattening
+        everything into one string) keeps a wrong-length word from shifting
+        every later character out of alignment — the bug that made wpm
+        collapse to near zero while raw stayed high.
+
+        Monkeytype convention: 1 word == 5 characters, the space after a
+        completed word counts as a correct character, wpm counts only
+        correct characters, raw counts everything typed.
+        """
+        dw = self.word_display
+        correct = incorrect = extra = missed = 0
+        for wi in range(dw.word_idx + 1):
+            target = dw.words[wi]
+            typed = dw.typed[wi]
+            for ci, ch in enumerate(typed):
+                if ci < len(target):
+                    if ch == target[ci]:
+                        correct += 1
+                    else:
+                        incorrect += 1
+                else:
+                    extra += 1
+            if wi < dw.word_idx:  # a completed word
+                missed += max(0, len(target) - len(typed))
+                correct += 1  # the space separating it from the next word
+
+        total = correct + incorrect + extra
+        e = self.elapsed if self.elapsed > 0 else 0.001
+        minutes = e / 60
+        return {
+            "wpm": (correct / 5) / minutes,
+            "raw": (total / 5) / minutes,
+            "accuracy": (correct / total * 100) if total > 0 else 100.0,
+            "time": e,
+            "correct": correct, "incorrect": incorrect,
+            "extra": extra, "missed": missed,
+        }
 
     def _update_stats(self) -> None:
         e = self.elapsed if self.elapsed > 0 else 0.001
@@ -132,45 +159,23 @@ class MonkeytypeApp(App):
         else:
             t = f"{e:.1f}s"
 
-        typed = self._typed_text()
-        tgt = self._target_text()
-
-        total = len(typed)
-        correct = sum(1 for i, c in enumerate(typed) if i < len(tgt) and c == tgt[i]) if tgt else 0
-        m = e / 60
-        wpm = (correct / 5) / m if m > 0 else 0
-        raw = (total / 5) / m if m > 0 else 0
-        acc = (correct / total * 100) if total > 0 else 100
-
+        s = self._compute_stats()
         self.query_one("#stat-timer").update(t)
-        self.query_one("#stat-wpm").update(str(round(wpm)))
-        self.query_one("#stat-acc").update(f"{acc:.0f}%")
-        self.query_one("#stat-raw").update(str(round(raw)))
+        self.query_one("#stat-wpm").update(str(round(s["wpm"])))
+        self.query_one("#stat-acc").update(f"{s['accuracy']:.0f}%")
+        self.query_one("#stat-raw").update(str(round(s["raw"])))
 
     def _finish(self) -> None:
         if self.finished:
             return
         self.finished = True
         self.timer_running = False
-        typed = self._typed_text()
-        tgt = self._target_text()
-
-        total = len(typed)
-        correct = sum(1 for i, c in enumerate(typed) if i < len(tgt) and c == tgt[i]) if tgt else 0
-        incorrect = sum(1 for i, c in enumerate(typed) if i < len(tgt) and c != tgt[i]) if tgt else 0
-        extra = max(0, total - len(tgt))
-        missed = sum(1 for i in range(len(tgt)) if i >= total or typed[i] != tgt[i]) if tgt else 0
-        e = self.elapsed if self.elapsed > 0 else 0.001
-        m = e / 60
-        wpm = (correct / 5) / m if m > 0 else 0
-        raw = (total / 5) / m if m > 0 else 0
-        acc = (correct / total * 100) if total > 0 else 0
-
+        s = self._compute_stats()
         self.push_screen(ResultsScreen({
-            "wpm": wpm, "raw": raw, "accuracy": acc,
-            "time": round(e),
-            "correct_chars": correct, "incorrect_chars": incorrect,
-            "extra_chars": extra, "missed_chars": missed,
+            "wpm": s["wpm"], "raw": s["raw"], "accuracy": s["accuracy"],
+            "time": round(s["time"]),
+            "correct_chars": s["correct"], "incorrect_chars": s["incorrect"],
+            "extra_chars": s["extra"], "missed_chars": s["missed"],
         }))
 
     def _switch_mode(self, mode: str, value: int) -> None:
@@ -211,58 +216,63 @@ class MonkeytypeApp(App):
             event.stop()
             return
 
-        ch = event.character
+        dw = self.word_display
 
-        if ch is not None:
-            if not self.timer_running and ch in "12345678":
-                mode_map = {"1": ("time", 15), "2": ("time", 30), "3": ("time", 60), "4": ("time", 120),
-                            "5": ("words", 10), "6": ("words", 25), "7": ("words", 50), "8": ("words", 100)}
-                if ch in mode_map:
-                    self._switch_mode(*mode_map[ch])
-                    event.stop()
-                    return
-
-            if not self.timer_running:
-                self.timer_running = True
-                self.start_time = time.time()
-                self.elapsed = 0.0
-
-            dw = self.word_display
-
-            if ch == " ":
-                if dw.char_idx > 0 or dw.typed[dw.word_idx]:
-                    if dw.word_idx < len(dw.words) - 1:
-                        dw.word_idx += 1
-                        dw.char_idx = 0
-                    else:
-                        self._finish()
-            else:
-                dw.typed[dw.word_idx].append(ch)
-                dw.char_idx += 1
-
-            dw.refresh()
-
-            if self.mode == "words":
-                if dw.word_idx >= self.mode_value:
-                    self._finish()
-
-            self._update_stats()
-
-        elif event.key in ("backspace", "ctrl+h"):
-            dw = self.word_display
+        # Corrections are handled by key name, *before* character input.
+        # A backspace can arrive carrying a non-printable character payload
+        # (DEL / ^H); checking the key here keeps it from being appended as
+        # typed text instead of deleting.
+        if event.key in ("backspace", "ctrl+h"):
             if dw.char_idx > 0 and dw.typed[dw.word_idx]:
                 dw.typed[dw.word_idx].pop()
                 dw.char_idx -= 1
-                dw.refresh()
-                self._update_stats()
             elif dw.word_idx > 0 and dw.char_idx == 0:
                 dw.word_idx -= 1
                 dw.char_idx = len(dw.typed[dw.word_idx])
-                dw.refresh()
-                self._update_stats()
+            dw.refresh()
+            self._update_stats()
+            event.stop()
+            return
 
-        elif event.key == "escape":
+        if event.key == "escape":
             self._finish()
+            event.stop()
+            return
+
+        # From here on, only genuine printable characters count as typing.
+        ch = event.character
+        if ch is None or len(ch) != 1 or not ch.isprintable():
+            return
+
+        if not self.timer_running and ch in "12345678":
+            mode_map = {"1": ("time", 15), "2": ("time", 30), "3": ("time", 60), "4": ("time", 120),
+                        "5": ("words", 10), "6": ("words", 25), "7": ("words", 50), "8": ("words", 100)}
+            self._switch_mode(*mode_map[ch])
+            event.stop()
+            return
+
+        if not self.timer_running:
+            self.timer_running = True
+            self.start_time = time.time()
+            self.elapsed = 0.0
+
+        if ch == " ":
+            if dw.char_idx > 0 or dw.typed[dw.word_idx]:
+                if dw.word_idx < len(dw.words) - 1:
+                    dw.word_idx += 1
+                    dw.char_idx = 0
+                else:
+                    self._finish()
+        else:
+            dw.typed[dw.word_idx].append(ch)
+            dw.char_idx += 1
+
+        dw.refresh()
+
+        if self.mode == "words" and dw.word_idx >= self.mode_value:
+            self._finish()
+
+        self._update_stats()
 
     def action_reset(self) -> None:
         self._generate_words()
