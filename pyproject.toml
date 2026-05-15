@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "mty"
+version = "0.1.0"
+description = "monkeytype-like typing speed test for the terminal"
+requires-python = ">=3.10"
+dependencies = [
+    "textual>=0.41.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+mty = "mty:main"
+
+[tool.setuptools.packages.find]
+include = ["mty*"]
